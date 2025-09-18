@@ -183,9 +183,18 @@
         const sendButton = inputContainer.querySelector('button');
         const optionButtonsDiv = document.getElementById('option-buttons');
 
-        let suggestionsBox = null;
+        // Step dictionary
+        const steps = {
+            1: "start",
+            2: "vendor_name",
+            3: "invoice",
+            4: "date"
+        };
 
-        // Function to display a chatbot message
+        // Track last step called
+        let lastStep = 0;
+
+        // Function to display bot message
         function displayBotMessage(text) {
             const msgDiv = document.createElement('div');
             msgDiv.className = 'message chatbot-message';
@@ -194,7 +203,7 @@
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        // Function to display a user message
+        // Function to display user message
         function displayUserMessage(text) {
             const msgDiv = document.createElement('div');
             msgDiv.className = 'message user-message';
@@ -203,19 +212,14 @@
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        // Handle user's choice (Yes/No)
+        // Start chatbot on Yes click
         function handleChoice(choice) {
             optionButtonsDiv.style.display = 'none';
             displayUserMessage(choice === 'yes' ? 'Yes' : 'No');
 
             if (choice === 'yes') {
-                setTimeout(() => {
-                    displayBotMessage("Please provide vendor name");
-                    inputContainer.classList.remove('disabled');
-                    userInput.disabled = false;
-                    sendButton.disabled = false;
-                    userInput.focus();
-                }, 500);
+                lastStep = 1; // start
+                sendToChatbot({ action: steps[lastStep] });
             } else {
                 setTimeout(() => {
                     displayBotMessage("Thank you for using the service. Have a good day!");
@@ -223,96 +227,76 @@
             }
         }
 
-        // Handle sending the vendor name
-        function sendVendorName() {
-            const vendorName = userInput.value.trim();
-            if (vendorName !== '') {
-                if (suggestionsBox) {
-                    suggestionsBox.remove();
-                    suggestionsBox = null;
-                }
-
-                displayUserMessage(vendorName);
-
-                setTimeout(() => {
-                    displayBotMessage(`Thank you. Creating Sales Order for vendor: ${vendorName}.`);
-                    inputContainer.classList.add('disabled');
-                    userInput.disabled = true;
-                    sendButton.disabled = true;
-                    userInput.value = '';
-                }, 500);
-            }
-        }
-
-        // Handle suggestion selection
-        function selectSuggestion(vendor) {
-            userInput.value = vendor;
-            if (suggestionsBox) {
-                suggestionsBox.remove();
-                suggestionsBox = null;
-            }
-            sendVendorName();
-        }
-
-        // Fetch and display vendor suggestions from backend
-        async function showSuggestions() {
-            const query = userInput.value.trim();
-            if (query.length === 0) {
-                if (suggestionsBox) {
-                    suggestionsBox.remove();
-                    suggestionsBox = null;
-                }
-                return;
-            }
-
+        // Send message to Flask chatbot
+        async function sendToChatbot(payload) {
             try {
-                const response = await fetch(`http://127.0.0.1:5000/api/vendors?search=${encodeURIComponent(query)}`);
-                const vendors = await response.json();
+                const response = await fetch("http://127.0.0.1:5001/chatbot", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+                const data = await response.json();
+                displayBotMessage(data.reply);
 
-                if (suggestionsBox) {
-                    suggestionsBox.remove();
-                    suggestionsBox = null;
+                // Enable input after reply
+                inputContainer.classList.remove('disabled');
+                userInput.disabled = false;
+                sendButton.disabled = false;
+                userInput.focus();
+
+                // Update last step based on backend next_action
+                if (data.next_action) {
+                    // Find step number in dictionary
+                    for (let key in steps) {
+                        if (steps[key] === data.next_action) {
+                            lastStep = parseInt(key);
+                            break;
+                        }
+                    }
                 }
 
-                if (vendors.length > 0) {
-                    suggestionsBox = document.createElement('div');
-                    suggestionsBox.className = 'suggestions-box';
-
-                    vendors.forEach(vendor => {
-                        const suggestionItem = document.createElement('div');
-                        suggestionItem.className = 'suggestion-item';
-                        suggestionItem.textContent = vendor;
-                        suggestionItem.onclick = () => selectSuggestion(vendor);
-                        suggestionsBox.appendChild(suggestionItem);
-                    });
-
-                    chatBox.appendChild(suggestionsBox);
-                    suggestionsBox.style.display = 'block';
-                    chatBox.scrollTop = chatBox.scrollHeight;
-                }
             } catch (err) {
-                console.error("Error fetching vendor suggestions:", err);
+                console.error("Error communicating with chatbot:", err);
             }
+        }
+
+        // Handle sending user input
+        function sendUserMessage() {
+            const message = userInput.value.trim();
+            if (!message) return;
+
+            displayUserMessage(message);
+
+            // Disable input while waiting
+            inputContainer.classList.add('disabled');
+            userInput.disabled = true;
+            sendButton.disabled = true;
+            userInput.value = '';
+
+            // Send correct key based on lastStep
+            const payload = {};
+            payload["action"] = steps[lastStep]; // Flask uses 'action' to detect step
+
+            // Include user's answer only for vendor_name, invoice, date
+            if (lastStep === 2) payload["vendor_name"] = message;
+            if (lastStep === 3) payload["invoice_number"] = message;
+            if (lastStep === 4) payload["document_date"] = message;
+
+            sendToChatbot(payload);
         }
 
         // Event listeners
-        userInput.addEventListener('input', showSuggestions);
-
+        sendButton.addEventListener('click', sendUserMessage);
         userInput.addEventListener('keypress', function (event) {
             if (event.key === 'Enter' && !this.disabled) {
                 event.preventDefault();
-                sendVendorName();
+                sendUserMessage();
             }
         });
 
-        // Hide suggestions if the user clicks anywhere else
-        document.addEventListener('click', function (event) {
-            if (suggestionsBox && !inputContainer.contains(event.target) && !suggestionsBox.contains(event.target)) {
-                suggestionsBox.remove();
-                suggestionsBox = null;
-            }
-        });
     </script>
+
+
 
 
 </body>
