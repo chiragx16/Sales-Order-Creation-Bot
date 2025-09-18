@@ -183,18 +183,11 @@
         const sendButton = inputContainer.querySelector('button');
         const optionButtonsDiv = document.getElementById('option-buttons');
 
-        // Step dictionary
-        const steps = {
-            1: "start",
-            2: "vendor_name",
-            3: "invoice",
-            4: "date"
-        };
-
-        // Track last step called
+        const steps = { 1: "start", 2: "vendor_name", 3: "invoice", 4: "date" };
         let lastStep = 0;
+        let suggestionsBox = null;
 
-        // Function to display bot message
+        // Display bot message
         function displayBotMessage(text) {
             const msgDiv = document.createElement('div');
             msgDiv.className = 'message chatbot-message';
@@ -203,7 +196,7 @@
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        // Function to display user message
+        // Display user message
         function displayUserMessage(text) {
             const msgDiv = document.createElement('div');
             msgDiv.className = 'message user-message';
@@ -212,7 +205,7 @@
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        // Start chatbot on Yes click
+        // Start chatbot
         function handleChoice(choice) {
             optionButtonsDiv.style.display = 'none';
             displayUserMessage(choice === 'yes' ? 'Yes' : 'No');
@@ -227,7 +220,7 @@
             }
         }
 
-        // Send message to Flask chatbot
+        // Send to chatbot API
         async function sendToChatbot(payload) {
             try {
                 const response = await fetch("http://127.0.0.1:5001/chatbot", {
@@ -244,9 +237,8 @@
                 sendButton.disabled = false;
                 userInput.focus();
 
-                // Update last step based on backend next_action
+                // Update last step from backend
                 if (data.next_action) {
-                    // Find step number in dictionary
                     for (let key in steps) {
                         if (steps[key] === data.next_action) {
                             lastStep = parseInt(key);
@@ -260,29 +252,65 @@
             }
         }
 
-        // Handle sending user input
+        // Send user message
         function sendUserMessage() {
             const message = userInput.value.trim();
             if (!message) return;
 
             displayUserMessage(message);
 
-            // Disable input while waiting
             inputContainer.classList.add('disabled');
             userInput.disabled = true;
             sendButton.disabled = true;
             userInput.value = '';
 
-            // Send correct key based on lastStep
-            const payload = {};
-            payload["action"] = steps[lastStep]; // Flask uses 'action' to detect step
-
-            // Include user's answer only for vendor_name, invoice, date
+            const payload = { action: steps[lastStep] };
             if (lastStep === 2) payload["vendor_name"] = message;
             if (lastStep === 3) payload["invoice_number"] = message;
             if (lastStep === 4) payload["document_date"] = message;
 
             sendToChatbot(payload);
+        }
+
+        // Fetch and show vendor suggestions
+        async function showVendorSuggestions() {
+            if (lastStep !== 2) return; // only when asking for vendor name
+            const query = userInput.value.trim();
+            if (!query) {
+                if (suggestionsBox) { suggestionsBox.remove(); suggestionsBox = null; }
+                return;
+            }
+
+            try {
+                const res = await fetch(`http://127.0.0.1:5000/api/vendors?search=${encodeURIComponent(query)}`);
+                const vendors = await res.json();
+
+                if (suggestionsBox) { suggestionsBox.remove(); suggestionsBox = null; }
+
+                if (vendors.length > 0) {
+                    suggestionsBox = document.createElement('div');
+                    suggestionsBox.className = 'suggestions-box';
+
+                    vendors.forEach(vendor => {
+                        const item = document.createElement('div');
+                        item.className = 'suggestion-item';
+                        item.textContent = vendor;
+                        item.onclick = () => {
+                            userInput.value = vendor;
+                            suggestionsBox.remove();
+                            suggestionsBox = null;
+                            sendUserMessage();
+                        };
+                        suggestionsBox.appendChild(item);
+                    });
+
+                    chatBox.appendChild(suggestionsBox);
+                    suggestionsBox.style.display = 'block';
+                    chatBox.scrollTop = chatBox.scrollHeight;
+                }
+            } catch (err) {
+                console.error("Error fetching vendors:", err);
+            }
         }
 
         // Event listeners
@@ -293,8 +321,17 @@
                 sendUserMessage();
             }
         });
+        userInput.addEventListener('input', showVendorSuggestions);
 
+        // Hide suggestions on click outside
+        document.addEventListener('click', function (event) {
+            if (suggestionsBox && !inputContainer.contains(event.target) && !suggestionsBox.contains(event.target)) {
+                suggestionsBox.remove();
+                suggestionsBox = null;
+            }
+        });
     </script>
+
 
 
 
