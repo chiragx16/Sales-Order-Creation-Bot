@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -57,12 +58,12 @@
             color: #000;
             border-bottom-left-radius: 5px;
         }
-        
+
         .option-buttons {
-            align-self: flex-end; /* Align to the right like a user message */
+            align-self: flex-end;
             display: flex;
             gap: 10px;
-            margin-top: -5px; /* Adjust spacing */
+            margin-top: -5px;
             margin-bottom: 15px;
         }
 
@@ -82,7 +83,7 @@
         }
 
         .input-container {
-            display: flex; 
+            display: flex;
             padding: 10px;
             border-top: 1px solid #ddd;
             background-color: #f9f9f9;
@@ -112,13 +113,39 @@
         .input-container button:hover {
             background-color: #0056b3;
         }
-        
+
         /* Disabled state for the input field and button */
         .input-container.disabled input,
         .input-container.disabled button {
             background-color: #e9ecef;
             cursor: not-allowed;
             color: #6c757d;
+        }
+
+        /* Styles for the suggestions box */
+        .suggestions-box {
+            align-self: flex-end;
+            /* Aligned to the user's side */
+            background-color: #fff;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            max-width: 80%;
+            margin-bottom: 15px;
+            padding: 5px;
+            display: none;
+            /* Initially hidden */
+        }
+
+        .suggestions-box .suggestion-item {
+            padding: 8px 12px;
+            cursor: pointer;
+            border-radius: 8px;
+            color: #007bff;
+        }
+
+        .suggestions-box .suggestion-item:hover {
+            background-color: #f0f2f5;
         }
 
         @media (max-width: 480px) {
@@ -130,6 +157,7 @@
         }
     </style>
 </head>
+
 <body>
 
     <div class="chat-container">
@@ -143,7 +171,7 @@
             </div>
         </div>
         <div class="input-container disabled" id="input-container">
-            <input type="text" id="user-input" placeholder="Type vendor name..." disabled>
+            <input type="text" id="user-input" placeholder="Type vendor name..." disabled autocomplete="off">
             <button onclick="sendVendorName()" disabled>Send</button>
         </div>
     </div>
@@ -154,6 +182,8 @@
         const userInput = document.getElementById('user-input');
         const sendButton = inputContainer.querySelector('button');
         const optionButtonsDiv = document.getElementById('option-buttons');
+
+        let suggestionsBox = null;
 
         // Function to display a chatbot message
         function displayBotMessage(text) {
@@ -175,15 +205,13 @@
 
         // Handle user's choice (Yes/No)
         function handleChoice(choice) {
-            // Remove the buttons after a choice is made
             optionButtonsDiv.style.display = 'none';
-
             displayUserMessage(choice === 'yes' ? 'Yes' : 'No');
-            
+
             if (choice === 'yes') {
                 setTimeout(() => {
                     displayBotMessage("Please provide vendor name");
-                    inputContainer.classList.remove('disabled'); // Enable the input container
+                    inputContainer.classList.remove('disabled');
                     userInput.disabled = false;
                     sendButton.disabled = false;
                     userInput.focus();
@@ -194,24 +222,99 @@
                 }, 500);
             }
         }
-        
+
         // Handle sending the vendor name
         function sendVendorName() {
             const vendorName = userInput.value.trim();
-            
             if (vendorName !== '') {
+                if (suggestionsBox) {
+                    suggestionsBox.remove();
+                    suggestionsBox = null;
+                }
+
                 displayUserMessage(vendorName);
-                
+
                 setTimeout(() => {
                     displayBotMessage(`Thank you. Creating Sales Order for vendor: ${vendorName}.`);
-                    inputContainer.classList.add('disabled'); // Disable the input after confirmation
+                    inputContainer.classList.add('disabled');
                     userInput.disabled = true;
                     sendButton.disabled = true;
                     userInput.value = '';
                 }, 500);
             }
         }
+
+        // Handle suggestion selection
+        function selectSuggestion(vendor) {
+            userInput.value = vendor;
+            if (suggestionsBox) {
+                suggestionsBox.remove();
+                suggestionsBox = null;
+            }
+            sendVendorName();
+        }
+
+        // Fetch and display vendor suggestions from backend
+        async function showSuggestions() {
+            const query = userInput.value.trim();
+            if (query.length === 0) {
+                if (suggestionsBox) {
+                    suggestionsBox.remove();
+                    suggestionsBox = null;
+                }
+                return;
+            }
+
+            try {
+                const response = await fetch(`http://127.0.0.1:5000/api/vendors?search=${encodeURIComponent(query)}`);
+                const vendors = await response.json();
+
+                if (suggestionsBox) {
+                    suggestionsBox.remove();
+                    suggestionsBox = null;
+                }
+
+                if (vendors.length > 0) {
+                    suggestionsBox = document.createElement('div');
+                    suggestionsBox.className = 'suggestions-box';
+
+                    vendors.forEach(vendor => {
+                        const suggestionItem = document.createElement('div');
+                        suggestionItem.className = 'suggestion-item';
+                        suggestionItem.textContent = vendor;
+                        suggestionItem.onclick = () => selectSuggestion(vendor);
+                        suggestionsBox.appendChild(suggestionItem);
+                    });
+
+                    chatBox.appendChild(suggestionsBox);
+                    suggestionsBox.style.display = 'block';
+                    chatBox.scrollTop = chatBox.scrollHeight;
+                }
+            } catch (err) {
+                console.error("Error fetching vendor suggestions:", err);
+            }
+        }
+
+        // Event listeners
+        userInput.addEventListener('input', showSuggestions);
+
+        userInput.addEventListener('keypress', function (event) {
+            if (event.key === 'Enter' && !this.disabled) {
+                event.preventDefault();
+                sendVendorName();
+            }
+        });
+
+        // Hide suggestions if the user clicks anywhere else
+        document.addEventListener('click', function (event) {
+            if (suggestionsBox && !inputContainer.contains(event.target) && !suggestionsBox.contains(event.target)) {
+                suggestionsBox.remove();
+                suggestionsBox = null;
+            }
+        });
     </script>
 
+
 </body>
+
 </html>
