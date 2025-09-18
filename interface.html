@@ -59,9 +59,11 @@
         }
         
         .option-buttons {
+            align-self: flex-end; /* Align to the right like a user message */
             display: flex;
             gap: 10px;
-            margin-top: 10px;
+            margin-top: -5px; /* Adjust spacing */
+            margin-bottom: 15px;
         }
 
         .option-buttons button {
@@ -80,7 +82,7 @@
         }
 
         .input-container {
-            display: none; /* Initially hidden */
+            display: flex; 
             padding: 10px;
             border-top: 1px solid #ddd;
             background-color: #f9f9f9;
@@ -110,6 +112,14 @@
         .input-container button:hover {
             background-color: #0056b3;
         }
+        
+        /* Disabled state for the input field and button */
+        .input-container.disabled input,
+        .input-container.disabled button {
+            background-color: #e9ecef;
+            cursor: not-allowed;
+            color: #6c757d;
+        }
 
         @media (max-width: 480px) {
             .chat-container {
@@ -124,16 +134,26 @@
 
     <div class="chat-container">
         <div class="chat-box" id="chat-box">
+            <div class="message chatbot-message">
+                Do you want to create Sales Order??
             </div>
-        <div class="input-container" id="input-container">
-            <input type="text" id="user-input" placeholder="Type vendor name...">
-            <button onclick="sendVendorName()">Send</button>
+            <div class="option-buttons" id="option-buttons">
+                <button onclick="handleChoice('yes')">Yes</button>
+                <button onclick="handleChoice('no')">No</button>
+            </div>
+        </div>
+        <div class="input-container disabled" id="input-container">
+            <input type="text" id="user-input" placeholder="Type vendor name..." disabled>
+            <button onclick="sendVendorName()" disabled>Send</button>
         </div>
     </div>
 
     <script>
         const chatBox = document.getElementById('chat-box');
         const inputContainer = document.getElementById('input-container');
+        const userInput = document.getElementById('user-input');
+        const sendButton = inputContainer.querySelector('button');
+        const optionButtonsDiv = document.getElementById('option-buttons');
 
         // Function to display a chatbot message
         function displayBotMessage(text) {
@@ -153,42 +173,20 @@
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        // Initial chatbot message with buttons
-        function startChat() {
-            displayBotMessage("Do you want to create Sales Order??");
-            
-            const buttonContainer = document.createElement('div');
-            buttonContainer.className = 'option-buttons';
-            
-            const yesButton = document.createElement('button');
-            yesButton.textContent = 'Yes';
-            yesButton.onclick = () => handleChoice('yes');
-            
-            const noButton = document.createElement('button');
-            noButton.textContent = 'No';
-            noButton.onclick = () => handleChoice('no');
-
-            buttonContainer.appendChild(yesButton);
-            buttonContainer.appendChild(noButton);
-            chatBox.appendChild(buttonContainer);
-            chatBox.scrollTop = chatBox.scrollHeight;
-        }
-
         // Handle user's choice (Yes/No)
         function handleChoice(choice) {
             // Remove the buttons after a choice is made
-            const buttons = chatBox.querySelector('.option-buttons');
-            if (buttons) {
-                buttons.remove();
-            }
-            
+            optionButtonsDiv.style.display = 'none';
+
             displayUserMessage(choice === 'yes' ? 'Yes' : 'No');
             
             if (choice === 'yes') {
                 setTimeout(() => {
                     displayBotMessage("Please provide vendor name");
-                    inputContainer.style.display = 'flex'; // Show the text input
-                    document.getElementById('user-input').focus();
+                    inputContainer.classList.remove('disabled'); // Enable the input container
+                    userInput.disabled = false;
+                    sendButton.disabled = false;
+                    userInput.focus();
                 }, 500);
             } else {
                 setTimeout(() => {
@@ -199,7 +197,6 @@
         
         // Handle sending the vendor name
         function sendVendorName() {
-            const userInput = document.getElementById('user-input');
             const vendorName = userInput.value.trim();
             
             if (vendorName !== '') {
@@ -207,14 +204,13 @@
                 
                 setTimeout(() => {
                     displayBotMessage(`Thank you. Creating Sales Order for vendor: ${vendorName}.`);
-                    inputContainer.style.display = 'none'; // Hide the input after confirmation
+                    inputContainer.classList.add('disabled'); // Disable the input after confirmation
+                    userInput.disabled = true;
+                    sendButton.disabled = true;
                     userInput.value = '';
                 }, 500);
             }
         }
-
-        // Start the chat when the page loads
-        document.addEventListener('DOMContentLoaded', startChat);
     </script>
 
 </body>
