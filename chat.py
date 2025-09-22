@@ -53,6 +53,44 @@ def get_vendor_code_from_db(vendor_name):
         return None
 
 
+
+# --- HANA Database connection function for item ---
+def get_item_details_from_db(item_name):
+    try:
+        conn = dbapi.connect(
+            address=db_address,
+            port=db_port,
+            user=db_user,
+            password=db_password
+        )
+        cursor = conn.cursor()
+
+        query = '''
+        SELECT T0."ItemCode", T0."ItemName", T0."PriceUnit"
+        FROM "MJENGO_TEST_020725"."OITM" T0
+        WHERE T0."ItemName" = ?
+        '''
+        cursor.execute(query, (item_name,))
+        result = cursor.fetchone()
+        cursor.close()
+        conn.close()
+
+        if result:
+            return {
+                "ItemCode": result[0],
+                "ItemName": result[1],
+                "PriceUnit": result[2]
+            }
+        else:
+            return None
+    except Exception as e:
+        print("HANA DB Error (Item):", e)
+        return None
+
+
+
+
+
 @app.route("/chatbot", methods=["POST"])
 def chatbot():
     data = request.json
@@ -83,20 +121,32 @@ def chatbot():
 
         print(user_data)
         return jsonify(
-            reply=f"{vendor_msg} Now, please provide invoice number:",
-            next_action="invoice"
+            reply=f"{vendor_msg} Now, please provide item description:",
+            next_action="itm_description"
         )
 
-    # Invoice number step
-    if action == "invoice":
-        invoice_number = data.get("invoice_number")
-        if not invoice_number:
-            return jsonify(reply="Please provide a valid invoice number.", next_action="invoice")
-        user_data["invoice_number"] = invoice_number
+    # Item description step
+    if action == "itm_description":
+        itm_description = data.get("itm_description")
+        if not itm_description:
+            return jsonify(reply="Please provide a valid item description.", next_action="itm_description")
+
+        # --- Fetch item details from HANA DB ---
+        item_details = get_item_details_from_db(itm_description)
+        if item_details:
+            user_data["ItemCode"] = item_details["ItemCode"]
+            user_data["ItemName"] = item_details["ItemName"]
+            user_data["PriceUnit"] = item_details["PriceUnit"]
+            item_msg = f"Got it! Item recorded: {item_details['ItemName']} (Code: {item_details['ItemCode']}, UnitPrice: {item_details['PriceUnit']})"
+        else:
+            item_msg = f"Item '{itm_description}' not found in database."
+
+        print(user_data)
         return jsonify(
-            reply=f"Got it! Invoice recorded: {invoice_number}. Now, please enter document date (YYYY-MM-DD):",
+            reply=f"{item_msg}. Now, please enter document date (YYYY-MM-DD):",
             next_action="date"
         )
+
 
     # Document date step
     if action == "date":

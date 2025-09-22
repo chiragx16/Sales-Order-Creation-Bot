@@ -183,7 +183,7 @@
         const sendButton = inputContainer.querySelector('button');
         const optionButtonsDiv = document.getElementById('option-buttons');
 
-        const steps = { 1: "start", 2: "vendor_name", 3: "invoice", 4: "date" };
+        const steps = { 1: "start", 2: "vendor_name", 3: "itm_description", 4: "date" };
         let lastStep = 0;
         let suggestionsBox = null;
 
@@ -275,7 +275,7 @@
 
             const payload = { action: steps[lastStep] };
             if (lastStep === 2) payload["vendor_name"] = message;
-            if (lastStep === 3) payload["invoice_number"] = message;
+            if (lastStep === 3) payload["itm_description"] = message;
             if (lastStep === 4) payload["document_date"] = message;
 
             sendToChatbot(payload);
@@ -325,7 +325,7 @@
 
         // Fetch and show item suggestions
         async function showItemSuggestions() {
-            if (lastStep !== 3) return; // only when asking for invoice/item name
+            if (lastStep !== 3) return; // only when asking for item description
             const query = userInput.value.trim();
             if (!query) {
                 if (suggestionsBox) { suggestionsBox.remove(); suggestionsBox = null; }
