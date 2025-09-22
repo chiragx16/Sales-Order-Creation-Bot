@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sales Order Chatbot</title>
+    <title>Chatbot</title>
     <style>
         body {
             font-family: sans-serif;
@@ -114,7 +114,6 @@
             background-color: #0056b3;
         }
 
-        /* Disabled state for the input field and button */
         .input-container.disabled input,
         .input-container.disabled button {
             background-color: #e9ecef;
@@ -122,10 +121,8 @@
             color: #6c757d;
         }
 
-        /* Styles for the suggestions box */
         .suggestions-box {
             align-self: flex-end;
-            /* Aligned to the user's side */
             background-color: #fff;
             border: 1px solid #ddd;
             border-radius: 10px;
@@ -134,7 +131,6 @@
             margin-bottom: 15px;
             padding: 5px;
             display: none;
-            /* Initially hidden */
         }
 
         .suggestions-box .suggestion-item {
@@ -159,20 +155,20 @@
 </head>
 
 <body>
-
     <div class="chat-container">
         <div class="chat-box" id="chat-box">
             <div class="message chatbot-message">
-                Do you want to create Sales Order??
+                Please select a use case
             </div>
             <div class="option-buttons" id="option-buttons">
-                <button onclick="handleChoice('yes')">Yes</button>
-                <button onclick="handleChoice('no')">No</button>
+                <button onclick="selectUseCase('sales_order')">Sales Order</button>
+                <button onclick="selectUseCase('invoice')">Invoice</button>
+                <button onclick="selectUseCase('other')">Other</button>
             </div>
         </div>
         <div class="input-container disabled" id="input-container">
-            <input type="text" id="user-input" placeholder="Type vendor name..." disabled autocomplete="off">
-            <button onclick="sendVendorName()" disabled>Send</button>
+            <input type="text" id="user-input" placeholder="Type here..." disabled autocomplete="off">
+            <button onclick="sendUserMessage()" disabled>Send</button>
         </div>
     </div>
 
@@ -183,11 +179,63 @@
         const sendButton = inputContainer.querySelector('button');
         const optionButtonsDiv = document.getElementById('option-buttons');
 
-        const steps = { 1: "start", 2: "vendor_name", 3: "date", 4: "itm_description" , 5: "quantity", 6:"confirm"};
+        let currentUseCase = null;
         let lastStep = 0;
         let suggestionsBox = null;
 
-        // Display bot message
+        const flows = {
+            sales_order: { 1: "start", 2: "vendor_name", 3: "date", 4: "itm_description", 5: "quantity", 6: "confirm" },
+            invoice: { 1: "start", 2: "invoice_number", 3: "date", 4: "confirm" },
+            other: { 1: "start", 2: "message" }
+        };
+
+        let steps = {}; // current flow steps
+
+        function selectUseCase(useCase) {
+            currentUseCase = useCase;
+            steps = flows[useCase]; // set steps for this use case
+            optionButtonsDiv.style.display = 'none';
+            displayUserMessage(useCase.replace("_", " "));
+
+            if (useCase === 'sales_order') {
+                displayBotMessage("Do you want to create Sales Order??");
+                showYesNoOptions();
+            } else {
+                displayBotMessage("Thank you! This flow is not implemented yet.");
+            }
+        }
+
+        function showYesNoOptions() {
+            const yesNoDiv = document.createElement('div');
+            yesNoDiv.className = 'option-buttons';
+            yesNoDiv.id = 'yes-no-options';
+
+            const yesBtn = document.createElement('button');
+            yesBtn.textContent = 'Yes';
+            yesBtn.onclick = () => {
+                displayUserMessage('Yes'); // display Yes in user bubble
+                yesNoDiv.remove();
+                lastStep = 1;
+                inputContainer.classList.remove('disabled');
+                userInput.disabled = false;
+                sendButton.disabled = false;
+                userInput.focus();
+                sendToChatbot({ action: steps[lastStep], use_case: currentUseCase });
+            };
+
+            const noBtn = document.createElement('button');
+            noBtn.textContent = 'No';
+            noBtn.onclick = () => {
+                displayUserMessage('No'); // display No in user bubble
+                yesNoDiv.remove();
+                displayBotMessage("Okay! Thank you.");
+            };
+
+            yesNoDiv.appendChild(yesBtn);
+            yesNoDiv.appendChild(noBtn);
+            chatBox.appendChild(yesNoDiv);
+        }
+
         function displayBotMessage(text) {
             const msgDiv = document.createElement('div');
             msgDiv.className = 'message chatbot-message';
@@ -196,7 +244,6 @@
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        // Display user message
         function displayUserMessage(text) {
             const msgDiv = document.createElement('div');
             msgDiv.className = 'message user-message';
@@ -205,31 +252,6 @@
             chatBox.scrollTop = chatBox.scrollHeight;
         }
 
-        // Start chatbot
-        function handleChoice(choice) {
-            optionButtonsDiv.style.display = 'none';
-            displayUserMessage(choice === 'yes' ? 'Yes' : 'No');
-
-            if (choice === 'yes') {
-                lastStep = 1; // start
-
-                // Enable input BEFORE sending first request
-                inputContainer.classList.remove('disabled');
-                userInput.disabled = false;
-                sendButton.disabled = false;
-                userInput.focus();
-
-                // Send first request
-                sendToChatbot({ action: steps[lastStep] });
-            } else {
-                setTimeout(() => {
-                    displayBotMessage("Thank you for using the service. Have a good day!");
-                }, 500);
-            }
-        }
-
-
-        // Send to chatbot API
         async function sendToChatbot(payload) {
             try {
                 const response = await fetch("http://127.0.0.1:5001/chatbot", {
@@ -240,13 +262,11 @@
                 const data = await response.json();
                 displayBotMessage(data.reply);
 
-                // Enable input after reply
                 inputContainer.classList.remove('disabled');
                 userInput.disabled = false;
                 sendButton.disabled = false;
                 userInput.focus();
 
-                // Update last step from backend
                 if (data.next_action) {
                     for (let key in steps) {
                         if (steps[key] === data.next_action) {
@@ -255,13 +275,11 @@
                         }
                     }
                 }
-
             } catch (err) {
-                console.error("Error communicating with chatbot:", err);
+                console.error("Error:", err);
             }
         }
 
-        // Send user message
         function sendUserMessage() {
             const message = userInput.value.trim();
             if (!message) return;
@@ -273,35 +291,41 @@
             sendButton.disabled = true;
             userInput.value = '';
 
-            const payload = { action: steps[lastStep] };
-            if (lastStep === 2) payload["vendor_name"] = message;
-            if (lastStep === 3) payload["document_date"] = message;
-            if (lastStep === 4) payload["itm_description"] = message;
-            if (lastStep === 5) payload["quantity"] = message;
-            if (lastStep === 6) payload["confirm"] = message;
+            const payload = { action: steps[lastStep], use_case: currentUseCase };
+            if (lastStep === 2) {
+                if (currentUseCase === 'sales_order') payload.vendor_name = message;
+                else if (currentUseCase === 'invoice') payload.invoice_number = message;
+            }
+            if (lastStep === 3) payload.document_date = message;
+            if (lastStep === 4 && currentUseCase === 'sales_order') payload.itm_description = message;
+            if (lastStep === 5) payload.quantity = message;
+            if (lastStep === 6) payload.confirm = message;
 
             sendToChatbot(payload);
         }
 
-        // Fetch and show vendor suggestions
-        async function showVendorSuggestions() {
-            if (lastStep !== 2) return; // only when asking for vendor name
-            const query = userInput.value.trim();
-            if (!query) {
-                if (suggestionsBox) { suggestionsBox.remove(); suggestionsBox = null; }
-                return;
+        userInput.addEventListener('keypress', function (event) {
+            if (event.key === 'Enter' && !this.disabled) {
+                event.preventDefault();
+                sendUserMessage();
             }
+        });
 
+        userInput.addEventListener('input', function () {
+            if (lastStep === 2 && currentUseCase === 'sales_order') showVendorSuggestions();
+            else if (lastStep === 4 && currentUseCase === 'sales_order') showItemSuggestions();
+        });
+
+        async function showVendorSuggestions() {
+            const query = userInput.value.trim();
+            if (!query) { if (suggestionsBox) { suggestionsBox.remove(); suggestionsBox = null; } return; }
             try {
                 const res = await fetch(`http://127.0.0.1:5000/api/vendors?search=${encodeURIComponent(query)}`);
                 const vendors = await res.json();
-
                 if (suggestionsBox) { suggestionsBox.remove(); suggestionsBox = null; }
-
                 if (vendors.length > 0) {
                     suggestionsBox = document.createElement('div');
                     suggestionsBox.className = 'suggestions-box';
-
                     vendors.forEach(vendor => {
                         const item = document.createElement('div');
                         item.className = 'suggestion-item';
@@ -314,36 +338,23 @@
                         };
                         suggestionsBox.appendChild(item);
                     });
-
                     chatBox.appendChild(suggestionsBox);
                     suggestionsBox.style.display = 'block';
                     chatBox.scrollTop = chatBox.scrollHeight;
                 }
-            } catch (err) {
-                console.error("Error fetching vendors:", err);
-            }
+            } catch (err) { console.error("Error:", err); }
         }
 
-
-        // Fetch and show item suggestions
         async function showItemSuggestions() {
-            if (lastStep !== 4) return; // only when asking for item description
             const query = userInput.value.trim();
-            if (!query) {
-                if (suggestionsBox) { suggestionsBox.remove(); suggestionsBox = null; }
-                return;
-            }
-
+            if (!query) { if (suggestionsBox) { suggestionsBox.remove(); suggestionsBox = null; } return; }
             try {
                 const res = await fetch(`http://127.0.0.1:5000/api/items?search=${encodeURIComponent(query)}`);
                 const items = await res.json();
-
                 if (suggestionsBox) { suggestionsBox.remove(); suggestionsBox = null; }
-
                 if (items.length > 0) {
                     suggestionsBox = document.createElement('div');
                     suggestionsBox.className = 'suggestions-box';
-
                     items.forEach(item => {
                         const itemDiv = document.createElement('div');
                         itemDiv.className = 'suggestion-item';
@@ -356,40 +367,13 @@
                         };
                         suggestionsBox.appendChild(itemDiv);
                     });
-
                     chatBox.appendChild(suggestionsBox);
                     suggestionsBox.style.display = 'block';
                     chatBox.scrollTop = chatBox.scrollHeight;
                 }
-            } catch (err) {
-                console.error("Error fetching items:", err);
-            }
+            } catch (err) { console.error("Error:", err); }
         }
 
-
-
-        // Event listeners
-        sendButton.addEventListener('click', sendUserMessage);
-        userInput.addEventListener('keypress', function (event) {
-            if (event.key === 'Enter' && !this.disabled) {
-                event.preventDefault();
-                sendUserMessage();
-            }
-        });
-
-
-
-        // Add event listener for input to show item suggestions
-        userInput.addEventListener('input', function () {
-            if (lastStep === 2) {
-                showVendorSuggestions();
-            } else if (lastStep === 4) {
-                showItemSuggestions();
-            }
-        });
-
-
-        // Hide suggestions on click outside
         document.addEventListener('click', function (event) {
             if (suggestionsBox && !inputContainer.contains(event.target) && !suggestionsBox.contains(event.target)) {
                 suggestionsBox.remove();
@@ -397,11 +381,6 @@
             }
         });
     </script>
-
-
-
-
-
 </body>
 
 </html>

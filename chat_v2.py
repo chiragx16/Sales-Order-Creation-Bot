@@ -16,7 +16,13 @@ app = Flask(__name__)
 CORS(app)
 
 # Temporary storage for user input (for demonstration, resets on server restart)
-user_data = {}
+user_data = {
+    "use_case": None,
+    "sales_order": {},   # store all sales order related data
+    "invoice": {},       # store all invoice related data
+    "other": {}          # etc
+}
+
 
 # --- HANA Database connection function ---
 def get_vendor_code_from_db(vendor_name):
@@ -91,15 +97,12 @@ def get_item_details_from_db(item_name):
 
 
 
-@app.route("/chatbot", methods=["POST"])
-def chatbot():
-    data = request.json
-    action = data.get("action")
+def sales_order_flow(action, data):
+    flow_data = user_data["sales_order"]
 
-    # Start step
     if action == "start":
         return jsonify(
-            reply="Great! Let's create a sales order. Please provide the vendor name:",
+            reply="Great! Let's create a Sales Order. Please provide the vendor name:",
             next_action="vendor_name"
         )
 
@@ -124,7 +127,6 @@ def chatbot():
             reply=f"{vendor_msg} Now, please provide Document Date (YYYY-MM-DD):",
             next_action="date"
         )
-    
 
     # Document date step
     if action == "date":
@@ -169,25 +171,51 @@ def chatbot():
         summary = f"quantity: {user_data.get('quantity')} \nType 'view' to see all details:"
 
         return jsonify(reply=summary, next_action="confirm")
-    
 
-    # Confirm step
     if action == "confirm":
         summary = (
             f"✅ Sales Order Summary:\n"
-            f"Vendor: {user_data.get('vendor_name')} (Code: {user_data.get('vendor_code')})\n"
-            f"Document Date: {user_data.get('document_date')}\n"
-            f"Item: {user_data.get('ItemName')} (Code: {user_data.get('ItemCode')}, Unit Price: {user_data.get('PriceUnit')})\n"
-            f"Quantity: {user_data.get('quantity')}"
+            f"Vendor: {flow_data.get('vendor_name')} (Code: {flow_data.get('vendor_code')})\n"
+            f"Document Date: {flow_data.get('document_date')}\n"
+            f"Item: {flow_data.get('ItemName')} (Code: {flow_data.get('ItemCode')}, Unit Price: {flow_data.get('PriceUnit')})\n"
+            f"Quantity: {flow_data.get('quantity')}"
         )
-        return jsonify(
-            reply=summary,
-            next_action="end"  # You can define 'end' to finalize or restart
-        )
+        return jsonify(reply=summary, next_action="end")
+
+    return jsonify(reply="Invalid step in Sales Order flow.", next_action="start")
 
 
-    # Default fallback
+
+
+
+
+
+
+
+@app.route("/chatbot", methods=["POST"])
+def chatbot():
+    data = request.json
+    action = data.get("action")
+    use_case = data.get("use_case")  # sales_order / invoice / other
+
+    # Set use_case if not already set
+    if use_case and not user_data["use_case"]:
+        user_data["use_case"] = use_case
+
+    # SALES ORDER FLOW
+    if user_data["use_case"] == "sales_order":
+        return sales_order_flow(action, data)
+    
+    # INVOICE FLOW
+    elif user_data["use_case"] == "invoice":
+        return invoice_flow(action, data)
+
+    # OTHER FLOW
+    elif user_data["use_case"] == "other":
+        return jsonify(reply="Thank you! No further action implemented yet.", next_action="end")
+
     return jsonify(reply="Something went wrong. Please start again.", next_action="start")
+
 
 
 if __name__ == "__main__":
