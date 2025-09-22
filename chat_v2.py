@@ -51,7 +51,7 @@ def get_vendor_code_from_db(vendor_name):
         conn.close()
 
         if result:
-            return result  # vendor_code
+            return result[0]  # vendor_code
         else:
             return None
     except Exception as e:
@@ -112,12 +112,12 @@ def sales_order_flow(action, data):
         if not vendor_name:
             return jsonify(reply="Please provide a valid vendor name.", next_action="vendor_name")
 
-        user_data["vendor_name"] = vendor_name
+        flow_data["vendor_name"] = vendor_name
 
         # --- Fetch vendor code from HANA DB ---
         vendor_code = get_vendor_code_from_db(vendor_name)
         if vendor_code:
-            user_data["vendor_code"] = vendor_code
+            flow_data["vendor_code"] = vendor_code
             vendor_msg = f"Perfect! Vendor recorded: {vendor_name} (Code: {vendor_code})."
         else:
             vendor_msg = f"Vendor '{vendor_name}' not found in database."
@@ -133,8 +133,8 @@ def sales_order_flow(action, data):
         document_date = data.get("document_date")
         if not document_date:
             return jsonify(reply="Please provide a valid document date.", next_action="date")
-        user_data["document_date"] = document_date
-        summary = f"Date: {user_data.get('document_date')} Now, please provide Item Description:"
+        flow_data["document_date"] = document_date
+        summary = f"Date: {flow_data.get('document_date')} Now, please provide Item Description:"
 
         return jsonify(reply=summary, next_action="itm_description")
 
@@ -148,9 +148,9 @@ def sales_order_flow(action, data):
         # --- Fetch item details from HANA DB ---
         item_details = get_item_details_from_db(itm_description)
         if item_details:
-            user_data["ItemCode"] = item_details["ItemCode"]
-            user_data["ItemName"] = item_details["ItemName"]
-            user_data["PriceUnit"] = item_details["PriceUnit"]
+            flow_data["ItemCode"] = item_details["ItemCode"]
+            flow_data["ItemName"] = item_details["ItemName"]
+            flow_data["PriceUnit"] = item_details["PriceUnit"]
             item_msg = f"Got it! Item recorded: {item_details['ItemName']} (Code: {item_details['ItemCode']}, UnitPrice: {item_details['PriceUnit']})"
         else:
             item_msg = f"Item '{itm_description}' not found in database."
@@ -162,13 +162,13 @@ def sales_order_flow(action, data):
         )
 
 
-    # Document date step
+    # Quantity step
     if action == "quantity":
         quantity = data.get("quantity")
         if not quantity:
             return jsonify(reply="Please provide a valid Item Quantity.", next_action="quantity")
-        user_data["quantity"] = quantity
-        summary = f"quantity: {user_data.get('quantity')} \nType 'view' to see all details:"
+        flow_data["quantity"] = quantity
+        summary = f"quantity: {flow_data.get('quantity')} \nType 'view' to see all details:"
 
         return jsonify(reply=summary, next_action="confirm")
 
@@ -188,6 +188,49 @@ def sales_order_flow(action, data):
 
 
 
+def invoice_flow(action, data):
+    flow_data = user_data["invoice"]
+
+    if action == "start":
+        return jsonify(
+            reply="Great! Let's create a Invoice. Please provide the invoice number:",
+            next_action="invoice_number"
+        )
+
+    # Invoice number step
+    if action == "invoice_number":
+        invoice_number = data.get("invoice_number")
+        if not invoice_number:
+            return jsonify(reply="Please provide a valid invoice number.", next_action="invoice_number")
+
+        flow_data["invoice_number"] = invoice_number
+
+        print(user_data)
+        return jsonify(
+            reply=f"Invoice Number: {invoice_number} Now, please provide Document Date (YYYY-MM-DD):",
+            next_action="date"
+        )
+
+    # Document date step
+    if action == "date":
+        document_date = data.get("document_date")
+        if not document_date:
+            return jsonify(reply="Please provide a valid document date.", next_action="date")
+        flow_data["document_date"] = document_date
+        summary = f"Date: {flow_data.get('document_date')} Type 'view' to see all details:"
+
+        return jsonify(reply=summary, next_action="confirm")
+
+
+    if action == "confirm":
+        summary = (
+            f"✅ Invoice Summary:\n"
+            f"Invoice Number: {flow_data.get('invoice_number')}\n"
+            f"Document Date: {flow_data.get('document_date')}\n"
+        )
+        return jsonify(reply=summary, next_action="end")
+
+    return jsonify(reply="Invalid step in Invoice flow.", next_action="start")
 
 
 
@@ -199,7 +242,7 @@ def chatbot():
     use_case = data.get("use_case")  # sales_order / invoice / other
 
     # Set use_case if not already set
-    if use_case and not user_data["use_case"]:
+    if use_case:
         user_data["use_case"] = use_case
 
     # SALES ORDER FLOW

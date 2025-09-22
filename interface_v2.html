@@ -157,9 +157,7 @@
 <body>
     <div class="chat-container">
         <div class="chat-box" id="chat-box">
-            <div class="message chatbot-message">
-                Please select a use case
-            </div>
+            <div class="message chatbot-message">Please select a use case</div>
             <div class="option-buttons" id="option-buttons">
                 <button onclick="selectUseCase('sales_order')">Sales Order</button>
                 <button onclick="selectUseCase('invoice')">Invoice</button>
@@ -193,12 +191,12 @@
 
         function selectUseCase(useCase) {
             currentUseCase = useCase;
-            steps = flows[useCase]; // set steps for this use case
+            steps = flows[useCase];
             optionButtonsDiv.style.display = 'none';
             displayUserMessage(useCase.replace("_", " "));
 
-            if (useCase === 'sales_order') {
-                displayBotMessage("Do you want to create Sales Order??");
+            if (useCase === 'sales_order' || useCase === 'invoice') {
+                displayBotMessage(`Do you want to start the ${useCase.replace("_", " ")} flow?`);
                 showYesNoOptions();
             } else {
                 displayBotMessage("Thank you! This flow is not implemented yet.");
@@ -213,7 +211,7 @@
             const yesBtn = document.createElement('button');
             yesBtn.textContent = 'Yes';
             yesBtn.onclick = () => {
-                displayUserMessage('Yes'); // display Yes in user bubble
+                displayUserMessage('Yes');
                 yesNoDiv.remove();
                 lastStep = 1;
                 inputContainer.classList.remove('disabled');
@@ -226,7 +224,7 @@
             const noBtn = document.createElement('button');
             noBtn.textContent = 'No';
             noBtn.onclick = () => {
-                displayUserMessage('No'); // display No in user bubble
+                displayUserMessage('No');
                 yesNoDiv.remove();
                 displayBotMessage("Okay! Thank you.");
             };
@@ -269,10 +267,7 @@
 
                 if (data.next_action) {
                     for (let key in steps) {
-                        if (steps[key] === data.next_action) {
-                            lastStep = parseInt(key);
-                            break;
-                        }
+                        if (steps[key] === data.next_action) lastStep = parseInt(key);
                     }
                 }
             } catch (err) {
@@ -285,20 +280,21 @@
             if (!message) return;
 
             displayUserMessage(message);
-
             inputContainer.classList.add('disabled');
             userInput.disabled = true;
             sendButton.disabled = true;
             userInput.value = '';
 
             const payload = { action: steps[lastStep], use_case: currentUseCase };
+
+            // Map user input to backend fields based on current step and use case
             if (lastStep === 2) {
                 if (currentUseCase === 'sales_order') payload.vendor_name = message;
-                else if (currentUseCase === 'invoice') payload.invoice_number = message;
+                if (currentUseCase === 'invoice') payload.invoice_number = message;
             }
             if (lastStep === 3) payload.document_date = message;
             if (lastStep === 4 && currentUseCase === 'sales_order') payload.itm_description = message;
-            if (lastStep === 5) payload.quantity = message;
+            if (lastStep === 5 && currentUseCase === 'sales_order') payload.quantity = message;
             if (lastStep === 6) payload.confirm = message;
 
             sendToChatbot(payload);
@@ -311,6 +307,7 @@
             }
         });
 
+        // Optional: vendor/item suggestions for sales order
         userInput.addEventListener('input', function () {
             if (lastStep === 2 && currentUseCase === 'sales_order') showVendorSuggestions();
             else if (lastStep === 4 && currentUseCase === 'sales_order') showItemSuggestions();
@@ -326,23 +323,18 @@
                 if (vendors.length > 0) {
                     suggestionsBox = document.createElement('div');
                     suggestionsBox.className = 'suggestions-box';
-                    vendors.forEach(vendor => {
+                    vendors.forEach(v => {
                         const item = document.createElement('div');
                         item.className = 'suggestion-item';
-                        item.textContent = vendor;
-                        item.onclick = () => {
-                            userInput.value = vendor;
-                            suggestionsBox.remove();
-                            suggestionsBox = null;
-                            sendUserMessage();
-                        };
+                        item.textContent = v;
+                        item.onclick = () => { userInput.value = v; suggestionsBox.remove(); suggestionsBox = null; sendUserMessage(); }
                         suggestionsBox.appendChild(item);
                     });
                     chatBox.appendChild(suggestionsBox);
                     suggestionsBox.style.display = 'block';
                     chatBox.scrollTop = chatBox.scrollHeight;
                 }
-            } catch (err) { console.error("Error:", err); }
+            } catch (err) { console.error(err); }
         }
 
         async function showItemSuggestions() {
@@ -355,23 +347,18 @@
                 if (items.length > 0) {
                     suggestionsBox = document.createElement('div');
                     suggestionsBox.className = 'suggestions-box';
-                    items.forEach(item => {
+                    items.forEach(i => {
                         const itemDiv = document.createElement('div');
                         itemDiv.className = 'suggestion-item';
-                        itemDiv.textContent = item;
-                        itemDiv.onclick = () => {
-                            userInput.value = item;
-                            suggestionsBox.remove();
-                            suggestionsBox = null;
-                            sendUserMessage();
-                        };
+                        itemDiv.textContent = i;
+                        itemDiv.onclick = () => { userInput.value = i; suggestionsBox.remove(); suggestionsBox = null; sendUserMessage(); }
                         suggestionsBox.appendChild(itemDiv);
                     });
                     chatBox.appendChild(suggestionsBox);
                     suggestionsBox.style.display = 'block';
                     chatBox.scrollTop = chatBox.scrollHeight;
                 }
-            } catch (err) { console.error("Error:", err); }
+            } catch (err) { console.error(err); }
         }
 
         document.addEventListener('click', function (event) {
@@ -381,6 +368,7 @@
             }
         });
     </script>
+    
 </body>
 
 </html>

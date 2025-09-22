@@ -1,12 +1,7 @@
-22-09-2025 18:09 PM 
-- Modified Code to use bot for multi-purpose (like Sales Order, Invoice, etc)
-- main files are now :
+22-09-2025 19:13 PM 
+- Modified chat_v2.py to add Sample Invoice Flow just to test things, updated few bugs
+
+- main files are:
     - chat_v2.py
     - interface_v2.html
     - redis_store.py
-- To implement old flow (only Sales Order) use this files:
-    - chat.py
-    - interface.html
-    - redis_store.py
-
-- deleted redis_store_v2.py, since it was not being used anywhere
