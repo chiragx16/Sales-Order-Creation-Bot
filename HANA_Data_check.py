@@ -27,7 +27,7 @@ try:
     cursor = connection.cursor()
 
     query = '''
-        SELECT TOP 10 * FROM MJENGO_TEST_020725.OCRD;
+        SELECT TOP 10 * FROM MJENGO_TEST_020725.OITM;
     '''
 
     cursor.execute(query)
