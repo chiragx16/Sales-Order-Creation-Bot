@@ -9,3 +9,7 @@ DB_Schema.txt
 output.json
 
 help.txt
+
+*.zip
+
+redis_atore.zip

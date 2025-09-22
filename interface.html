@@ -212,6 +212,14 @@
 
             if (choice === 'yes') {
                 lastStep = 1; // start
+
+                // Enable input BEFORE sending first request
+                inputContainer.classList.remove('disabled');
+                userInput.disabled = false;
+                sendButton.disabled = false;
+                userInput.focus();
+
+                // Send first request
                 sendToChatbot({ action: steps[lastStep] });
             } else {
                 setTimeout(() => {
@@ -219,6 +227,7 @@
                 }, 500);
             }
         }
+
 
         // Send to chatbot API
         async function sendToChatbot(payload) {
@@ -313,6 +322,50 @@
             }
         }
 
+
+        // Fetch and show item suggestions
+        async function showItemSuggestions() {
+            if (lastStep !== 3) return; // only when asking for invoice/item name
+            const query = userInput.value.trim();
+            if (!query) {
+                if (suggestionsBox) { suggestionsBox.remove(); suggestionsBox = null; }
+                return;
+            }
+
+            try {
+                const res = await fetch(`http://127.0.0.1:5000/api/items?search=${encodeURIComponent(query)}`);
+                const items = await res.json();
+
+                if (suggestionsBox) { suggestionsBox.remove(); suggestionsBox = null; }
+
+                if (items.length > 0) {
+                    suggestionsBox = document.createElement('div');
+                    suggestionsBox.className = 'suggestions-box';
+
+                    items.forEach(item => {
+                        const itemDiv = document.createElement('div');
+                        itemDiv.className = 'suggestion-item';
+                        itemDiv.textContent = item;
+                        itemDiv.onclick = () => {
+                            userInput.value = item;
+                            suggestionsBox.remove();
+                            suggestionsBox = null;
+                            sendUserMessage();
+                        };
+                        suggestionsBox.appendChild(itemDiv);
+                    });
+
+                    chatBox.appendChild(suggestionsBox);
+                    suggestionsBox.style.display = 'block';
+                    chatBox.scrollTop = chatBox.scrollHeight;
+                }
+            } catch (err) {
+                console.error("Error fetching items:", err);
+            }
+        }
+
+
+
         // Event listeners
         sendButton.addEventListener('click', sendUserMessage);
         userInput.addEventListener('keypress', function (event) {
@@ -321,7 +374,18 @@
                 sendUserMessage();
             }
         });
-        userInput.addEventListener('input', showVendorSuggestions);
+
+
+
+        // Add event listener for input to show item suggestions
+        userInput.addEventListener('input', function () {
+            if (lastStep === 2) {
+                showVendorSuggestions();
+            } else if (lastStep === 3) {
+                showItemSuggestions();
+            }
+        });
+
 
         // Hide suggestions on click outside
         document.addEventListener('click', function (event) {
