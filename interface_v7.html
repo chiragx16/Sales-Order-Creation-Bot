@@ -12,7 +12,7 @@
             theme: {
                 extend: {
                     fontFamily: {
-                        sans: ['Inter', 'sans-serif'],
+                        sans: ['Verdana', 'sans-serif'],
                     },
                     colors: {
                         primary: '#1d4ed8', // Blue-700
@@ -147,32 +147,43 @@
                 delete_index: index
             };
 
-            console.log(payload)
+            console.log("Deleting item:", payload);
 
             fetch("http://localhost:5001/chatbot", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)
             })
-                .then(res => res.json())
-                // .then(data => {
-                //     // Replace chat content or preview area with updated HTML
-                //     if (data.reply_html) {
-                //         document.getElementById("preview-container").innerHTML = data.reply_html;
-                //     } else {
-                //         alert(data.reply);
-                //     }
-                // })
-                .then(data => {
-                    const previewDiv = document.getElementById("preview-container");
-                    if (data.reply_html && previewDiv) {
-                        previewDiv.innerHTML = data.reply_html;
+            .then(res => res.json())
+            .then(data => {
+                if (data.reply_html) {
+                    // ✅ Safe update or create preview container
+                    const previewContainer = document.getElementById("preview-container");
+
+                    if (previewContainer) {
+                        previewContainer.innerHTML = data.reply_html;
                     } else {
-                        appendBotMessage(data.reply_html || data.reply);
+                        const chatContainer = document.getElementById("chat-container") || document.body;
+                        const wrapper = document.createElement("div");
+                        wrapper.id = "preview-container";
+                        wrapper.innerHTML = data.reply_html;
+                        chatContainer.appendChild(wrapper);
                     }
-                });
-                // .catch (console.error);
+
+                } else if (data.reply) {
+                    // ⚠️ Show user message as alert (like "cannot delete last item")
+                    alert(data.reply);
+                } else {
+                    alert("⚠️ No response received from server.");
+                }
+            })
+            .catch(err => {
+                console.error("Error deleting item:", err);
+                alert("⚠️ Error while deleting item. Please try again.");
+            });
         }
+
+
 
         // --- End Helper Functions ---
 

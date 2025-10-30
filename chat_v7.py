@@ -222,7 +222,7 @@ def sales_order_flow(action, data, session_data):
             )
         elif user_response in ["no", "n"]:
             return jsonify(
-                reply="Alright! Preparing Sales Order summary... Type 'view' to show details",
+                reply="Alright! Preparing Sales Order summary... Type 'VIEW' to show details",
                 next_action="preview"
             )
         else:
@@ -271,7 +271,7 @@ def sales_order_flow(action, data, session_data):
 
 
         reply_html = f"""
-        <div id='preview-container'>
+        <div id='preview-container' style="font-family:sans-serif;">
         <div class='bg-white border border-gray-300 rounded-xl shadow-md p-4 w-full max-w-2xl'>
             <h3 class='text-lg font-bold text-primary mb-3'>✅ Sales Order Preview</h3>
             <div class='text-gray-700 mb-2'><span class='font-semibold'>Customer:</span> {customer_name} ({customer_code})</div>
@@ -309,27 +309,28 @@ def sales_order_flow(action, data, session_data):
 
     # --- Delete item step ---
     if action == "delete_item":
-        print("data : ", data)
-        print("flow_data : ", flow_data)
         delete_index = data.get("delete_index")
         if delete_index is None:
             return jsonify(reply="Please specify which item number to delete.", next_action="preview")
 
         try:
             delete_index = int(delete_index)
-            if delete_index < 1 or delete_index > len(flow_data.get("items", [])):
-                return jsonify(reply=f"⚠️ Invalid item number: {delete_index}.", next_action="preview")
+            items = flow_data.get("items", [])
 
-            removed_item = flow_data["items"].pop(delete_index - 1)
-            reply_msg = f"🗑️ Deleted item #{delete_index}: {removed_item['ItemName']}."
-
-            if len(flow_data["items"]) == 0:
+            # 🛑 Prevent deleting if only one item left
+            if len(items) <= 1:
                 return jsonify(
-                    reply=f"{reply_msg}\nNo items left. Please add new item description:",
-                    next_action="itm_description"
+                    reply="⚠️ You must have at least one item in the Sales Order. Cannot delete the last remaining item.",
+                    next_action="preview"
                 )
 
-            # Return updated preview
+            if delete_index < 1 or delete_index > len(items):
+                return jsonify(reply=f"⚠️ Invalid item number: {delete_index}.", next_action="preview")
+
+            removed_item = items.pop(delete_index - 1)
+            reply_msg = f"🗑️ Deleted item #{delete_index}: {removed_item['ItemName']}."
+
+            # Return updated preview after deletion
             return sales_order_flow("preview", data, session_data)
 
         except Exception as e:
@@ -338,10 +339,14 @@ def sales_order_flow(action, data, session_data):
 
 
 
+
     # --- Confirm step ---
     if action == "confirm":
         # Here you would finalize the order, e.g., save to DB
         # For now, just acknowledge
+
+        print(data)
+        print(flow_data)
 
         user_response = data.get("confirm", "").strip().lower()
         print(user_response)
@@ -391,7 +396,7 @@ def invoice_flow(action, data):
         if not document_date:
             return jsonify(reply="Please provide a valid document date.", next_action="date")
         flow_data["document_date"] = document_date
-        summary = f"Date: {flow_data.get('document_date')} Type 'view' to see all details:"
+        summary = f"Date: {flow_data.get('document_date')} Type 'VIEW' to see all details:"
 
         return jsonify(reply=summary, next_action="confirm")
 
