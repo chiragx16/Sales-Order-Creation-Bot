@@ -1,3 +1,18 @@
+30-10-2025 10:45 AM
+- main files are:
+    - interface_v4.html 
+    - chat_v3.py
+
+
+
+29-10-2025 18:25 PM
+- Changes in files
+    - interface_v3.html (updated UI design)
+    - interface_v4.html (UI design for allowing multiple items)
+    - chat_v3.py (allowing multiple items)
+
+
+
 22-09-2025 19:13 PM 
 - Modified chat_v2.py to add Sample Invoice Flow just to test things, updated few bugs
 

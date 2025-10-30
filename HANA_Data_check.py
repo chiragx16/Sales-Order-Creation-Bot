@@ -27,7 +27,7 @@ try:
     cursor = connection.cursor()
 
     query = '''
-        SELECT TOP 10 * FROM MJENGO_TEST_020725.OITM;
+        SELECT TOP 10 * FROM VCERP_TEST.OCRD;
     '''
 
     cursor.execute(query)
@@ -52,7 +52,7 @@ try:
 
     print(json_data)
 
-    with open("output.json", "w", encoding="utf-8") as file:
+    with open("OCRD.json", "w", encoding="utf-8") as file:
         file.write(json_data)
 
 except Exception as e:

@@ -26,21 +26,20 @@ r = redis.StrictRedis(host=REDIS_HOST, port=REDIS_PORT, db=REDIS_DB, decode_resp
 # -----------------------------
 # INDEX CREATION
 # -----------------------------
-def create_vendor_index():
-    """Create RediSearch index for vendors if not exists"""
+def create_customer_index():
+    """Create RediSearch index for customers if not exists"""
     try:
         r.execute_command(
-            "FT.CREATE", "idx:vendors",
+            "FT.CREATE", "idx:customers",
             "ON", "HASH",
-            "PREFIX", "1", "vendor:",
+            "PREFIX", "1", "customer:",
             "SCHEMA",
-            "name", "TEXT",
-            "TEXT_PHONETIC", "EN"  # optional phonetic or ngram for better partial match
+            "name", "TEXT", "PHONETIC", "dm:en"  # Define 'name' once with both TEXT and PHONETIC
         )
-        print("✅ Created RediSearch index: idx:vendors")
+        print("✅ Created RediSearch index: idx:customers")
     except redis.ResponseError as e:
         if "Index already exists" in str(e):
-            print("ℹ️ Vendor index already exists, skipping")
+            print("ℹ️ Customer index already exists, skipping")
         else:
             raise
 
@@ -53,8 +52,7 @@ def create_item_index():
             "ON", "HASH",
             "PREFIX", "1", "item:",
             "SCHEMA",
-            "name", "TEXT",
-            "TEXT_PHONETIC", "EN"  # optional phonetic or ngram for better partial match
+            "name", "TEXT", "PHONETIC", "dm:en"  # Define 'name' once with both TEXT and PHONETIC
         )
         print("✅ Created RediSearch index: idx:items")
     except redis.ResponseError as e:
@@ -67,8 +65,8 @@ def create_item_index():
 # -----------------------------
 # LOAD DATA FROM HANA
 # -----------------------------
-def load_vendors_into_redis():
-    """Load all vendor names from SAP HANA into Redis"""
+def load_customers_into_redis():
+    """Load all customer names from SAP HANA into Redis"""
     conn = dbapi.connect(
         address=HANA_HOST,
         port=HANA_PORT,
@@ -78,21 +76,21 @@ def load_vendors_into_redis():
     cursor = conn.cursor()
 
     cursor.execute('SELECT "CardName" FROM "MJENGO_TEST_020725"."OCRD"')
-    vendors = [row[0] for row in cursor.fetchall()]
+    customers = [row[0] for row in cursor.fetchall()]
     conn.close()
 
-    # Clear old vendor keys
-    old_keys = r.keys("vendor:*")
+    # Clear old customer keys
+    old_keys = r.keys("customer:*")
     if old_keys:
         r.delete(*old_keys)
 
-    # Insert vendors as HASH
+    # Insert customers as HASH
     pipe = r.pipeline()
-    for i, v in enumerate(vendors):
-        pipe.hset(f"vendor:{i}", mapping={"name": v})
+    for i, v in enumerate(customers):
+        pipe.hset(f"customer:{i}", mapping={"name": v})
     pipe.execute()
 
-    print(f"✅ Loaded {len(vendors)} vendors into Redis.")
+    print(f"✅ Loaded {len(customers)} customers into Redis.")
 
 
 def load_items_into_redis():
@@ -126,8 +124,8 @@ def load_items_into_redis():
 # -----------------------------
 # API ENDPOINTS
 # -----------------------------
-@app.route("/api/vendors")
-def get_vendors():
+@app.route("/api/customers")
+def get_customers():
     query = request.args.get("search", "").strip()
     if not query:
         return jsonify([])
@@ -137,21 +135,21 @@ def get_vendors():
 
     try:
         res = r.execute_command(
-            "FT.SEARCH", "idx:vendors", redis_query,
+            "FT.SEARCH", "idx:customers", redis_query,
             "RETURN", "1", "name",
             "LIMIT", "0", "10"
         )
     except redis.ResponseError as e:
         return jsonify({"error": str(e)}), 500
 
-    vendor_names = []
+    customer_names = []
     for i in range(1, len(res), 2):
         fields = res[i + 1]
         for j in range(0, len(fields), 2):
             if fields[j] == "name":
-                vendor_names.append(fields[j + 1])
+                customer_names.append(fields[j + 1])
 
-    return jsonify(vendor_names)
+    return jsonify(customer_names)
 
 
 @app.route("/api/items")
@@ -186,8 +184,8 @@ def get_items():
 # MAIN
 # -----------------------------
 if __name__ == "__main__":
-    create_vendor_index()
+    create_customer_index()
     create_item_index()
-    load_vendors_into_redis()
+    load_customers_into_redis()
     load_items_into_redis()
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=False)

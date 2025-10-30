@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from hdbcli import dbapi  # SAP HANA client
 from dotenv import load_dotenv
+from datetime import datetime
 import os
 
 load_dotenv()
@@ -74,7 +75,7 @@ def get_item_details_from_db(item_name):
         query = '''
         SELECT T0."ItemCode", T0."ItemName", T0."PriceUnit"
         FROM "MJENGO_TEST_020725"."OITM" T0
-        WHERE T0."ItemName" = ?
+        WHERE LOWER(T0."ItemName") LIKE LOWER(?) 
         '''
         cursor.execute(query, (item_name,))
         result = cursor.fetchone()
@@ -100,13 +101,17 @@ def get_item_details_from_db(item_name):
 def sales_order_flow(action, data):
     flow_data = user_data["sales_order"]
 
+    if "items" not in flow_data:
+        flow_data["items"] = []
+
+    # --- Start flow ---
     if action == "start":
         return jsonify(
             reply="Great! Let's create a Sales Order. Please provide the Customer Name:",
             next_action="customer_name"
         )
 
-    # Customer name step
+    # --- Customer name step ---
     if action == "customer_name":
         customer_name = data.get("customer_name")
         if not customer_name:
@@ -114,75 +119,136 @@ def sales_order_flow(action, data):
 
         flow_data["customer_name"] = customer_name
 
-        # --- Fetch Customer Code from HANA DB ---
         customer_code = get_customer_code_from_db(customer_name)
         if customer_code:
             flow_data["customer_code"] = customer_code
-            customer_msg = f"Perfect! Customer recorded: {customer_name} (Code: {customer_code})."
+            msg = f"Customer recorded: {customer_name} (Code: {customer_code})."
+            return jsonify(
+                reply=f"{msg} Now, please provide Document Date (YYYY-MM-DD):",
+                next_action="date"
+            )
         else:
-            customer_msg = f"Customer '{customer_name}' not found in database."
+            # Customer not found → ask again
+            return jsonify(
+                reply=f"❌ Customer '{customer_name}' not found in database. Please try again with a valid Customer Name:",
+                next_action="customer_name"
+            )
 
-        print(user_data)
-        return jsonify(
-            reply=f"{customer_msg} Now, please provide Document Date (YYYY-MM-DD):",
-            next_action="date"
-        )
-
-    # Document date step
+    # --- Date step ---
     if action == "date":
         document_date = data.get("document_date")
         if not document_date:
-            return jsonify(reply="Please provide a valid document date.", next_action="date")
-        flow_data["document_date"] = document_date
-        summary = f"Date: {flow_data.get('document_date')} Now, please provide Item Description:"
+            return jsonify(reply="Please provide a valid document date (YYYY-MM-DD).", next_action="date")
+        
+        # Try to parse multiple date formats and convert to yyyy-mm-dd
+        parsed_date = None
+        possible_formats = [
+            "%Y-%m-%d", "%d-%m-%Y", "%d/%m/%Y", "%m-%d-%Y", "%m/%d/%Y",
+            "%Y-%b-%d", "%Y-%B-%d",  # 2020-Jan-16 / 2020-January-16
+            "%d-%b-%Y", "%d-%B-%Y",  # 30-Dec-2025 / 30-December-2025
+            "%d-%b-%y", "%d-%B-%y",  # 15-Jul-05 / 15-July-05
+            "%Y/%b/%d", "%d/%b/%Y", "%d/%B/%Y"
+        ]
+        for fmt in possible_formats:
+            try:
+                parsed_date = datetime.strptime(document_date, fmt)
+                break
+            except ValueError:
+                continue
 
-        return jsonify(reply=summary, next_action="itm_description")
+        if not parsed_date:
+            return jsonify(
+                reply="⚠️ Invalid date format. Please enter the date in YYYY-MM-DD format (e.g., 2025-10-29).",
+                next_action="date"
+            )
+
+        normalized_date = parsed_date.strftime("%Y-%m-%d")
+        flow_data["document_date"] = normalized_date
+        return jsonify(
+            reply=f"Date recorded as {normalized_date}. Please provide the first Item Description:",
+            next_action="itm_description"
+        )
 
 
-    # Item description step
+    # --- Item description step ---
     if action == "itm_description":
         itm_description = data.get("itm_description")
         if not itm_description:
             return jsonify(reply="Please provide a valid item description.", next_action="itm_description")
 
-        # --- Fetch item details from HANA DB ---
         item_details = get_item_details_from_db(itm_description)
         if item_details:
-            flow_data["ItemCode"] = item_details["ItemCode"]
-            flow_data["ItemName"] = item_details["ItemName"]
-            flow_data["PriceUnit"] = item_details["PriceUnit"]
-            item_msg = f"Got it! Item recorded: {item_details['ItemName']} (Code: {item_details['ItemCode']}, UnitPrice: {item_details['PriceUnit']})"
+            flow_data["current_item"] = {
+                "ItemCode": item_details["ItemCode"],
+                "ItemName": item_details["ItemName"],
+                "PriceUnit": item_details["PriceUnit"]
+            }
+            msg = f"Item recorded: {item_details['ItemName']} (Code: {item_details['ItemCode']}, Unit Price: {item_details['PriceUnit']})."
+            return jsonify(
+                reply=f"{msg} Now, please enter Item Quantity:",
+                next_action="quantity"
+            )
         else:
-            item_msg = f"Item '{itm_description}' not found in database."
-
-        print(user_data)
-        return jsonify(
-            reply=f"{item_msg}. Now, please enter Item Quantity:",
-            next_action="quantity"
-        )
+            # Item not found → ask again
+            return jsonify(
+                reply=f"❌ Item '{itm_description}' not found in database. Please enter a valid Item Description:",
+                next_action="itm_description"
+            )
 
 
-    # Quantity step
+    # --- Quantity step ---
     if action == "quantity":
         quantity = data.get("quantity")
         if not quantity:
-            return jsonify(reply="Please provide a valid Item Quantity.", next_action="quantity")
-        flow_data["quantity"] = quantity
-        summary = f"quantity: {flow_data.get('quantity')} \nType 'view' to see all details:"
+            return jsonify(reply="Please provide a valid quantity.", next_action="quantity")
 
-        return jsonify(reply=summary, next_action="confirm")
+        if "current_item" not in flow_data:
+            return jsonify(reply="No current item found. Please add item description first.", next_action="itm_description")
 
-    if action == "confirm":
-        summary = (
-            f"✅ Sales Order Summary:\n"
-            f"Customer: {flow_data.get('customer_name')} (Code: {flow_data.get('customer_code')})\n"
-            f"Document Date: {flow_data.get('document_date')}\n"
-            f"Item: {flow_data.get('ItemName')} (Code: {flow_data.get('ItemCode')}, Unit Price: {flow_data.get('PriceUnit')})\n"
-            f"Quantity: {flow_data.get('quantity')}"
+        flow_data["current_item"]["Quantity"] = quantity
+        flow_data["items"].append(flow_data["current_item"])
+        del flow_data["current_item"]
+
+        count = len(flow_data["items"])
+        return jsonify(
+            reply=f"Item #{count} added successfully! Do you want to add another item? (yes/no)",
+            next_action="add_more_items"
         )
-        return jsonify(reply=summary, next_action="end")
+
+    # --- Add more items decision ---
+    if action == "add_more_items":
+        user_response = data.get("add_more_items", "").strip().lower()
+        if user_response in ["yes", "y"]:
+            return jsonify(
+                reply="Okay, please provide the next Item Description:",
+                next_action="itm_description"
+            )
+        elif user_response in ["no", "n"]:
+            return jsonify(
+                reply="Alright! Preparing Sales Order summary... Type 'view' to show details",
+                next_action="confirm"
+            )
+        else:
+            return jsonify(reply="Please reply with 'yes' or 'no'.", next_action="add_more_items")
+
+    # --- Confirmation step ---
+    if action == "confirm":
+        summary_lines = [
+            f"Customer: {flow_data.get('customer_name')} (Code: {flow_data.get('customer_code')})",
+            f"Document Date: {flow_data.get('document_date')}",
+            "Items:"
+        ]
+        for idx, item in enumerate(flow_data["items"], start=1):
+            summary_lines.append(
+                f"  {idx}. {item['ItemName']} (Code: {item['ItemCode']}, Qty: {item['Quantity']}, UnitPrice: {item['PriceUnit']})"
+            )
+
+        summary_text = "✅ Sales Order Summary:\n" + "\n".join(summary_lines)
+        return jsonify(reply=summary_text, next_action="end")
 
     return jsonify(reply="Invalid step in Sales Order flow.", next_action="start")
+
+
 
 
 

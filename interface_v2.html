@@ -182,7 +182,7 @@
         let suggestionsBox = null;
 
         const flows = {
-            sales_order: { 1: "start", 2: "vendor_name", 3: "date", 4: "itm_description", 5: "quantity", 6: "confirm" },
+            sales_order: { 1: "start", 2: "customer_name", 3: "date", 4: "itm_description", 5: "quantity", 6: "confirm" },
             invoice: { 1: "start", 2: "invoice_number", 3: "date", 4: "confirm" },
             other: { 1: "start", 2: "message" }
         };
@@ -289,7 +289,7 @@
 
             // Map user input to backend fields based on current step and use case
             if (lastStep === 2) {
-                if (currentUseCase === 'sales_order') payload.vendor_name = message;
+                if (currentUseCase === 'sales_order') payload.customer_name = message;
                 if (currentUseCase === 'invoice') payload.invoice_number = message;
             }
             if (lastStep === 3) payload.document_date = message;
@@ -307,23 +307,23 @@
             }
         });
 
-        // Optional: vendor/item suggestions for sales order
+        // Optional: customer/item suggestions for sales order
         userInput.addEventListener('input', function () {
-            if (lastStep === 2 && currentUseCase === 'sales_order') showVendorSuggestions();
+            if (lastStep === 2 && currentUseCase === 'sales_order') showCustomerSuggestions();
             else if (lastStep === 4 && currentUseCase === 'sales_order') showItemSuggestions();
         });
 
-        async function showVendorSuggestions() {
+        async function showCustomerSuggestions() {
             const query = userInput.value.trim();
             if (!query) { if (suggestionsBox) { suggestionsBox.remove(); suggestionsBox = null; } return; }
             try {
-                const res = await fetch(`http://127.0.0.1:5000/api/vendors?search=${encodeURIComponent(query)}`);
-                const vendors = await res.json();
+                const res = await fetch(`http://127.0.0.1:5000/api/customers?search=${encodeURIComponent(query)}`);
+                const customers = await res.json();
                 if (suggestionsBox) { suggestionsBox.remove(); suggestionsBox = null; }
-                if (vendors.length > 0) {
+                if (customers.length > 0) {
                     suggestionsBox = document.createElement('div');
                     suggestionsBox.className = 'suggestions-box';
-                    vendors.forEach(v => {
+                    customers.forEach(v => {
                         const item = document.createElement('div');
                         item.className = 'suggestion-item';
                         item.textContent = v;
