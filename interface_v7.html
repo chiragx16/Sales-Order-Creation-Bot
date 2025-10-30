@@ -138,6 +138,42 @@
             return item;
         }
 
+        // Delete Items from preview
+        function deleteItem(index) {
+            const payload = {
+                session_id: sessionId,
+                use_case: "sales_order",
+                action: "delete_item",
+                delete_index: index
+            };
+
+            console.log(payload)
+
+            fetch("http://localhost:5001/chatbot", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload)
+            })
+                .then(res => res.json())
+                // .then(data => {
+                //     // Replace chat content or preview area with updated HTML
+                //     if (data.reply_html) {
+                //         document.getElementById("preview-container").innerHTML = data.reply_html;
+                //     } else {
+                //         alert(data.reply);
+                //     }
+                // })
+                .then(data => {
+                    const previewDiv = document.getElementById("preview-container");
+                    if (data.reply_html && previewDiv) {
+                        previewDiv.innerHTML = data.reply_html;
+                    } else {
+                        appendBotMessage(data.reply_html || data.reply);
+                    }
+                });
+                // .catch (console.error);
+        }
+
         // --- End Helper Functions ---
 
 
@@ -311,7 +347,7 @@
             if (lastStep === 6) payload.add_more_items = message;
             if (lastStep === 7) payload.preview = message;
             if (lastStep === 8) payload.confirm = message;
-            
+
             sendToChatbot(payload);
         }
 

@@ -1,3 +1,11 @@
+30-10-2025 16:05 PM
+- Previewed data into Table format, allow user to delete items if he wants
+- main files are:
+    - interface_v7.html 
+    - chat_v7.py
+
+
+
 30-10-2025 12:55 PM
 - Implementated session to manage multiple user access
 - main files are:
