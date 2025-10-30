@@ -1,4 +1,13 @@
+30-10-2025 11:50 AM
+- Updated frontend and backend to display final summary in nicer table structure
+- main files are:
+    - interface_v5.html 
+    - chat_v4.py
+
+
+
 30-10-2025 10:45 AM
+- Updated Code where frontend and backend allows user to add multiple items
 - main files are:
     - interface_v4.html 
     - chat_v3.py

@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SAP B1 Assistant Chatbot</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        primary: '#1d4ed8', // Blue-700
+                        secondary: '#f9fafb', // Gray-50
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+
+<!-- New body classes for full-screen background -->
+
+<body class="bg-gray-100 font-sans h-screen flex items-center justify-center p-4 md:p-8">
+
+    <!-- Chat Container - Now wider and taller -->
+    <div id="main-chat-wrapper"
+        class="w-full max-w-5xl h-full md:h-[85vh] bg-white rounded-none md:rounded-xl shadow-2xl flex flex-col overflow-hidden relative">
+
+        <!-- Chat Header -->
+        <div class="p-4 bg-primary text-white text-center font-extrabold text-xl shadow-lg">
+            SAP B1 Assistant
+        </div>
+
+        <!-- Chat Box (Messages) -->
+        <div class="flex-1 p-4 md:p-6 overflow-y-auto flex flex-col space-y-4 bg-secondary" id="chat-box">
+
+            <!-- Initial Chatbot Message -->
+            <div
+                class="message chatbot-message mr-auto bg-gray-200 text-gray-800 rounded-xl rounded-tl-none shadow-sm max-w-[80%] p-3 leading-snug break-words">
+                Please select a use case
+            </div>
+
+            <!-- Initial Option Buttons -->
+            <div class="flex flex-wrap gap-2 mt-1 mb-3 self-end" id="option-buttons">
+                <button onclick="selectUseCase('sales_order')"
+                    class="bg-primary hover:bg-blue-800 text-white font-medium py-2 px-4 rounded-full text-sm transition duration-150 shadow-md">Sales
+                    Order</button>
+                <button onclick="selectUseCase('invoice')"
+                    class="bg-primary hover:bg-blue-800 text-white font-medium py-2 px-4 rounded-full text-sm transition duration-150 shadow-md">Invoice</button>
+                <button onclick="selectUseCase('other')"
+                    class="bg-primary hover:bg-blue-800 text-white font-medium py-2 px-4 rounded-full text-sm transition duration-150 shadow-md">Other</button>
+            </div>
+
+        </div>
+
+        <!-- Input Container -->
+        <div class="input-container disabled flex p-4 border-t border-gray-200 bg-white" id="input-container">
+            <input type="text" id="user-input" placeholder="Type here..." disabled autocomplete="off"
+                class="flex-1 p-3 border border-gray-300 rounded-lg text-base focus:ring-2 focus:ring-primary focus:border-primary transition duration-150 disabled:bg-gray-200 disabled:cursor-not-allowed">
+            <button onclick="sendUserMessage()" disabled
+                class="ml-3 bg-primary hover:bg-blue-800 text-white font-semibold py-3 px-6 rounded-lg transition duration-150 shadow-md disabled:bg-gray-400 disabled:cursor-not-allowed">
+                Send
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const chatBox = document.getElementById('chat-box');
+        const inputContainer = document.getElementById('input-container');
+        const userInput = document.getElementById('user-input');
+        const sendButton = inputContainer.querySelector('button');
+        const optionButtonsDiv = document.getElementById('option-buttons');
+
+        let currentUseCase = null;
+        let lastStep = 0;
+        let suggestionsBox = null;
+
+        const flows = {
+            sales_order: {
+                1: "start",
+                2: "customer_name",
+                3: "date",
+                4: "itm_description",
+                5: "quantity",
+                6: "add_more_items",
+                7: "confirm"
+            },
+            invoice: { 1: "start", 2: "invoice_number", 3: "date", 4: "confirm" },
+            other: { 1: "start", 2: "message" }
+        };
+
+        let steps = {}; // current flow steps
+
+        // --- Helper Functions for Suggestion Display ---
+
+        // Function to create a simple SVG icon
+        function createIcon(dPath) {
+            const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+            svg.setAttribute('viewBox', '0 0 24 24');
+            svg.setAttribute('fill', 'none');
+            svg.setAttribute('stroke', 'currentColor');
+            svg.setAttribute('stroke-width', '2');
+            svg.setAttribute('stroke-linecap', 'round');
+            svg.setAttribute('stroke-linejoin', 'round');
+            svg.classList.add('w-5', 'h-5', 'mr-3', 'flex-shrink-0', 'text-primary');
+
+            const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+            path.setAttribute('d', dPath);
+            svg.appendChild(path);
+            return svg;
+        }
+
+        // Helper to create a single suggestion item with an icon and click logic
+        function createSuggestionItem(text, iconPath) {
+            const item = document.createElement('div');
+            // Enhanced styling for suggestion item
+            item.className = 'suggestion-item flex items-center p-3 cursor-pointer rounded-lg text-gray-800 hover:bg-primary/10 transition duration-150 text-base font-medium border-b border-gray-100 last:border-b-0';
+
+            item.appendChild(createIcon(iconPath));
+
+            const textNode = document.createElement('span');
+            textNode.textContent = text;
+            item.appendChild(textNode);
+
+            // Add the click handler logic
+            item.onclick = () => { userInput.value = text; suggestionsBox.remove(); suggestionsBox = null; sendUserMessage(); }
+
+            return item;
+        }
+
+        // --- End Helper Functions ---
+
+
+        function selectUseCase(useCase) {
+            currentUseCase = useCase;
+            steps = flows[useCase];
+            optionButtonsDiv.classList.add('hidden'); // Hide the main options
+            displayUserMessage(useCase.replace("_", " "));
+
+            if (useCase === 'sales_order' || useCase === 'invoice') {
+                displayBotMessage(`Do you want to start the ${useCase.replace("_", " ")} flow?`);
+                showYesNoOptions();
+            } else {
+                displayBotMessage("Thank you! This flow is not implemented yet.");
+                // Re-show initial options to restart flow
+                optionButtonsDiv.classList.remove('hidden');
+                inputContainer.classList.add('disabled');
+                userInput.disabled = true;
+                sendButton.disabled = true;
+                currentUseCase = null;
+                lastStep = 0;
+            }
+        }
+
+        function showYesNoOptions() {
+            const yesNoDiv = document.createElement('div');
+            yesNoDiv.className = 'flex flex-wrap gap-2 mt-1 mb-3 self-end';
+            yesNoDiv.id = 'yes-no-options';
+
+            const yesBtn = document.createElement('button');
+            yesBtn.textContent = 'Yes';
+            yesBtn.className = 'bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-full text-sm transition duration-150 shadow-md';
+            yesBtn.onclick = () => {
+                displayUserMessage('Yes');
+                yesNoDiv.remove();
+                lastStep = 1;
+                inputContainer.classList.remove('disabled');
+                userInput.disabled = false;
+                sendButton.disabled = false;
+                userInput.focus();
+                sendToChatbot({ action: steps[lastStep], use_case: currentUseCase });
+            };
+
+            const noBtn = document.createElement('button');
+            noBtn.textContent = 'No';
+            noBtn.className = 'bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-full text-sm transition duration-150 shadow-md';
+            noBtn.onclick = () => {
+                displayUserMessage('No');
+                yesNoDiv.remove();
+                displayBotMessage("Okay! Thank you.");
+                // Re-show initial options to restart flow
+                optionButtonsDiv.classList.remove('hidden');
+                inputContainer.classList.add('disabled');
+                userInput.disabled = true;
+                sendButton.disabled = true;
+                currentUseCase = null;
+                lastStep = 0;
+            };
+
+            yesNoDiv.appendChild(yesBtn);
+            yesNoDiv.appendChild(noBtn);
+            chatBox.appendChild(yesNoDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function displayBotMessage(text) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'message chatbot-message mr-auto bg-gray-200 text-gray-800 rounded-xl rounded-tl-none shadow-sm max-w-[80%] p-3 leading-snug break-words';
+            msgDiv.textContent = text;
+            chatBox.appendChild(msgDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        function displayUserMessage(text) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = 'message user-message ml-auto bg-primary text-white rounded-xl rounded-br-none shadow-md max-w-[80%] p-3 leading-snug break-words';
+            msgDiv.textContent = text;
+            chatBox.appendChild(msgDiv);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        async function sendToChatbot(payload) {
+            try {
+                // Simulate loading state
+                inputContainer.classList.add('opacity-50');
+
+                // Exponential Backoff for API calls (retrying 3 times)
+                const maxRetries = 3;
+                let response = null;
+                let data = null;
+
+                for (let i = 0; i < maxRetries; i++) {
+                    try {
+                        response = await fetch("http://127.0.0.1:5001/chatbot", {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify(payload)
+                        });
+
+                        if (response.ok) {
+                            data = await response.json();
+                            break; // Success, exit loop
+                        } else {
+                            throw new Error(`HTTP error! status: ${response.status}`);
+                        }
+                    } catch (error) {
+                        if (i < maxRetries - 1) {
+                            // Wait for 2^i seconds before retrying
+                            await new Promise(resolve => setTimeout(resolve, Math.pow(2, i) * 1000));
+                        } else {
+                            throw error; // Last retry failed
+                        }
+                    }
+                }
+
+                if (!data) throw new Error("Failed to get a response from chatbot API.");
+
+
+                if (data.reply_html) {
+                    const msgDiv = document.createElement('div');
+                    msgDiv.className = 'message chatbot-message mr-auto bg-gray-50 text-gray-800 rounded-xl rounded-tl-none shadow-sm max-w-[90%] p-3 leading-snug break-words';
+                    msgDiv.innerHTML = data.reply_html;
+                    chatBox.appendChild(msgDiv);
+                    chatBox.scrollTop = chatBox.scrollHeight;
+                } else {
+                    displayBotMessage(data.reply);
+                }
+
+
+                // Re-enable input
+                inputContainer.classList.remove('disabled', 'opacity-50');
+                userInput.disabled = false;
+                sendButton.disabled = false;
+                userInput.focus();
+
+                if (data.next_action) {
+                    for (let key in steps) {
+                        if (steps[key] === data.next_action) lastStep = parseInt(key);
+                    }
+                }
+            } catch (err) {
+                console.error("Error communicating with backend:", err);
+                displayBotMessage("Sorry, I encountered an error. Please try again or restart the flow.");
+
+                // Ensure input is enabled after error
+                inputContainer.classList.remove('opacity-50');
+                if (currentUseCase && lastStep > 0) {
+                    inputContainer.classList.remove('disabled');
+                    userInput.disabled = false;
+                    sendButton.disabled = false;
+                    userInput.focus();
+                } else {
+                    optionButtonsDiv.classList.remove('hidden');
+                    inputContainer.classList.add('disabled');
+                    userInput.disabled = true;
+                    sendButton.disabled = true;
+                    currentUseCase = null;
+                    lastStep = 0;
+                }
+            }
+        }
+
+        function sendUserMessage() {
+            const message = userInput.value.trim();
+            if (!message) return;
+
+            displayUserMessage(message);
+            inputContainer.classList.add('disabled');
+            userInput.disabled = true;
+            sendButton.disabled = true;
+            userInput.value = '';
+
+            const payload = { action: steps[lastStep], use_case: currentUseCase };
+
+            // Map user input to backend fields
+            if (lastStep === 2) payload.customer_name = message;
+            if (lastStep === 3) payload.document_date = message;
+            if (lastStep === 4) payload.itm_description = message;
+            if (lastStep === 5) payload.quantity = message;
+            if (lastStep === 6) payload.add_more_items = message;
+            if (lastStep === 7) payload.confirm = message;
+
+            sendToChatbot(payload);
+        }
+
+
+        userInput.addEventListener('keypress', function (event) {
+            if (event.key === 'Enter' && !this.disabled) {
+                event.preventDefault();
+                sendUserMessage();
+            }
+        });
+
+        // Optional: customer/item suggestions for sales order
+        userInput.addEventListener('input', function () {
+            if (lastStep === 2 && currentUseCase === 'sales_order') showCustomerSuggestions();
+            else if (lastStep === 4 && currentUseCase === 'sales_order') showItemSuggestions();
+            else if (suggestionsBox) { suggestionsBox.remove(); suggestionsBox = null; }
+        });
+
+        async function showCustomerSuggestions() {
+            const query = userInput.value.trim();
+            if (!query) { if (suggestionsBox) { suggestionsBox.remove(); suggestionsBox = null; } return; }
+
+            // Icon for person/customer
+            const customerIconPath = "M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z";
+
+            try {
+                const res = await fetch(`http://127.0.0.1:5000/api/customers?search=${encodeURIComponent(query)}`);
+                const customers = await res.json();
+
+                if (suggestionsBox) { suggestionsBox.remove(); suggestionsBox = null; }
+
+                if (customers.length > 0) {
+                    suggestionsBox = document.createElement('div');
+                    // Positioning: absolute, 76px up from the bottom (above the input bar)
+                    // ADDED max-h-64 and overflow-y-auto for scrolling
+                    suggestionsBox.className = 'absolute bottom-[76px] left-4 right-4 md:max-w-md md:right-8 bg-white border border-gray-200 rounded-xl shadow-2xl p-2 z-10 space-y-1 max-h-64 overflow-y-auto';
+
+                    // REMOVED .slice(0, 5) to display all results and allow scrolling
+                    customers.forEach(v => {
+                        suggestionsBox.appendChild(createSuggestionItem(v, customerIconPath));
+                    });
+
+                    document.getElementById('main-chat-wrapper').appendChild(suggestionsBox); // Append to main wrapper
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        async function showItemSuggestions() {
+            const query = userInput.value.trim();
+            if (!query) { if (suggestionsBox) { suggestionsBox.remove(); suggestionsBox = null; } return; }
+
+            // Icon for package/item
+            const itemIconPath = "M21 7.5l-2 2-2 2 2 2 2 2M3 17V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"; // Simple box/package icon
+
+            try {
+                const res = await fetch(`http://127.0.0.1:5000/api/items?search=${encodeURIComponent(query)}`);
+                const items = await res.json();
+
+                if (suggestionsBox) { suggestionsBox.remove(); suggestionsBox = null; }
+
+                if (items.length > 0) {
+                    suggestionsBox = document.createElement('div');
+                    // Positioning: absolute, 76px up from the bottom (above the input bar)
+                    // ADDED max-h-64 and overflow-y-auto for scrolling
+                    suggestionsBox.className = 'absolute bottom-[76px] left-4 right-4 md:max-w-md md:right-8 bg-white border border-gray-200 rounded-xl shadow-2xl p-2 z-10 space-y-1 max-h-64 overflow-y-auto';
+
+                    // REMOVED .slice(0, 5) to display all results and allow scrolling
+                    items.forEach(i => {
+                        suggestionsBox.appendChild(createSuggestionItem(i, itemIconPath));
+                    });
+
+                    document.getElementById('main-chat-wrapper').appendChild(suggestionsBox);
+                }
+            } catch (err) { console.error(err); }
+        }
+
+        document.addEventListener('click', function (event) {
+            // Check if click is outside the input container and suggestions box
+            if (suggestionsBox && !inputContainer.contains(event.target) && !suggestionsBox.contains(event.target)) {
+                suggestionsBox.remove();
+                suggestionsBox = null;
+            }
+        });
+    </script>
+
+</body>
+
+</html>
